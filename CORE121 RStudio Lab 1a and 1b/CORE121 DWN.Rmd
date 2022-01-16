@@ -1,0 +1,349 @@
+---
+title: "CORE121 Lab 1"
+author: "Ian McDonald"
+date: "6/28/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(include = FALSE)
+```
+
+
+```{r}
+source("lab_setup.R")
+```
+
+## Overview
+
+This is a beginner exercise that shows you how to manipulate and manage a basic dataset using the R programming environment.  We will use the interactive tool RStudio to produce results with the core R language.  
+
+The philosophy is that we can learn by "show and tell" and "imitation".  When you have a sense of R's possibilities you'll start to recognize that will a little Googling and little trial and error you can solve problems that seem impossible at first.
+
+If you're unfamiliar with programming in general or R specifically, don't worry.  The purpose of using R in these exercises is to acquaint you with R and RStudio, without expecting you to master the program.  You will learn a few basic ideas about managing and calculating data in a two-dimensional data set.
+
+Your only job:
+
+* Create a new R script file and save it to "lab1.R"
+        * Go to the R Studio menu  
+        * Select "File - New File - R Script"  
+        * Select "File - Save As, then enter "lab1" for the name
+You have created a blank R Scipr file called lab1.R.  As you make entries, you can save your additions with "File - Save" or "Command + S" on a Mac or "Windows + S" on Windows. 
+* Run the script, play around, and watch what happens.
+
+RULE 1: YOU CAN'T HURT ANYTHING. MAKE MISTAKES. BLOW THINGS UP. WATCH WHAT HAPPENS. START OVER AS OFTEN AS YOU WANT.
+RULE 2:  See Rule 1
+
+Copy and paste the content from the gray boxes into the lab1.R.  You can execute these entries in several ways.  The easiest way is to save your file and press the Run button 
+
+## How do interact with the web version of RStudio.
+
+
+**[INSTRUCTIONS FOR LOG IN AND LOAD THE PROJECT FILES INCLUDING LAB1.XLSX]**
+
+
+These statements will load some special code for this particular lab.  A library is a bundle of extra content that someone created to R users to accomplish some task isn't automatically found in the base version of R.  The content can contain program statements, data, or both.
+
+```{r}
+library(readxl)
+library(tigris)
+library(sf)
+library(tidyverse)
+```
+
+
+#googlesheets4::read_sheet("https://docs.google.com/spreadsheets/d/1wyhnEPoRB-JMssCWD_xslh_9G1JQiPXRuT_I0ibW600/edit#gid=74876023")
+
+This line reads from the file you used in the Excel Lab and stores it into an R object called a **Data Table**.  The name of the table is lab_1_data.  This table resembles an Excel worksheet but uses R's interactive data tools.
+
+```{r}
+lab_4_data <- read_excel("data/CELHouse93to116.xlsx")
+```
+
+
+I might discover that I need to change some of the names or labels or content in my new data table.  In this line below, the magic word is **mutate**.  Here, I use mutate to change some of the entries in the column labled "state".   Notice the first part of this statement: 
+
+lab_1_data <- lab_1_data %>% 
+
+I'm saying "read from my lab_1_data table and when you've made the changes, store it back into lab_1_data."  This means I can also store the results somewhere else, or just print the results on my screen.
+
+```{r}
+
+
+
+lab_4_data <- read_excel("data/CELHouse93to116.xlsx")
+
+
+
+x <- lab_4_data %>% 
+        filter(!is.na(`ICPSR number, according to Poole and Rosenthal`) & `Congress number` == 116) %>% 
+        select(st_code = `Two-letter state code`, cd = `Congressional district number`, dw1 = `First-dimension DW-NOMINATE score`) %>% 
+        group_by(st_code, cd) %>% 
+                summarize(dw1 = mean(dw1)) %>% 
+        ungroup()
+
+
+x <- x %>% 
+        group_by(st_code) %>% 
+                mutate(cv1 = n()) %>% 
+        ungroup()
+
+
+x <- x %>% 
+        mutate(cv2 = ifelse(cv1 == 1, "00", formatC(cv1, width = 2, flag = "0")))
+
+
+
+
+cd_sf <- congressional_districts(year = 2019) %>% shift_geometry()
+
+fips <- tidycensus::fips_codes %>%
+        select(state, state_code) %>% 
+        distinct()
+
+
+y <- inner_join(x, fips, by=c("st_code" = "state")) %>% 
+        rename(STATEFP = state_code, CD116FP = cv2)
+
+lab_4_sf <- inner_join(cd_sf, y, by=c("STATEFP", "CD116FP"))
+
+cd_sf %>% 
+ggplot() + geom_sf()
+
+us_counties <- counties(cb = TRUE, resolution = "20m") %>% 
+        shift_geometry()
+
+us_states <- states(cb = TRUE, resolution = "20m") %>% 
+        shift_geometry()
+
+ggplot(data=cd_sf) + geom_sf() + theme_void()
+
++
+     geom_sf(aes(fill = dw1), color = "black", size = 0.1) +
+     scale_fill_viridis_c() +
+     theme_void(base_size = 16) 
+
++
+     labs(title = "DW1 by CD",
+          fill = "Increase %",
+          caption = "Note: Alaska, Hawaii, and Puerto Rico are shifted and not to scale.") +
+     theme(plot.title = element_text(hjust = 0.5))
+
+
+
+
+```
+
+One of R's features is its ability, **to a fault**, to support different ways of handling tasks.  I could have done this instead:
+
+```{r}
+lab_1_data <- read_excel("data/Excel Lab 1.xlsx") %>% 
+        mutate(state = ifelse(state != "District of Columbia", str_to_title(state), state))
+```
+
+and I would have accomplished both tasks in one statement.  But it's possible I might want to take things one step at a time, usually because I want to see the results from each step before I consolidate them.  Or perhaps because I want to document my work in a particular way.
+
+We know from the first lab that I will be interested in creating sums of various columns.  
+
+Notice that the column names are funky and inconsistent.  We can make them shorter and more usable.
+
+```{r}
+lab_1_data <- lab_1_data %>% 
+        rename(pop_2014 = `2014 Citizen Population`,
+               voted_2014 = `2014 Total voted`,
+               pop_2018 = `2018 citizen Population`,
+               voted_2018 = `2018 total voted`)
+```
+
+
+In R, I can store those things separately for later use, like so:
+
+```{r}
+sums_of_lab1_data <- lab_1_data %>% 
+        summarize(pop_2014 = sum(pop_2014), 
+                  voted_2014 = sum(voted_2014), 
+                  pop_2014 = sum(voted_2014),  
+                  voted_2018 = sum(voted_2018))
+
+```
+
+But R is full of alternatives that can condense your statements, such as this one, where I tell it to "add everything that is like a numeric column".
+
+```{r}
+sums_of_lab1_data <- lab_1_data %>% 
+        summarize(across(where(is.numeric), sum))
+```
+
+
+By the way, notice that the original spreadsheet did not give us consistently named columns.  It gives us "2014 Citizen Population" and "2018 citizen Population."  When I get around to it, I might want to rename those things so that it's all short, consistent, and avoids the "`" quotation marks.
+
+But let's move on to the instructions of the original Excel lab.  Here, I'm going to generate some new columns that will mirror what I did in the original lab.  But notice that I don't have to copy formulas into cells with all the risks that entails.  I just make these general statements:
+
+```{r}
+
+lab_1_data <- lab_1_data %>% 
+     mutate(turnout_increase = (voted_2018 - voted_2014) / voted_2014 * 100) %>% 
+     arrange(desc(turnout_increase))
+
+```
+
+Let's say we're ready to inspect our data table.  I can, if I want, just click on the data table listing that appers in the upper right corner (under the tab Environment)  Or, I can just enter a command like this:
+
+Now, let's reproduce the instructions from the Excel Lab
+
+Presidential Turnout
+Worksheet 1, called Presidential turnout, has one record for each US State (rows), with three columns of numbers. These columns voter turnout over 10 election cycles. 
+Our goal is to look for some patterns and trends in this information.  
+Let’s start by thinking of some questions we might want to know from this data. Some possibilities: 
+
+- Which state had the greatest increase in its turnout? 
+- Which state had the greatest decrease?  
+- How has support for Republicans and Democrats varied?
+- Which county had the highest total turnout?
+
+Can we answer all of these questions with this particular data? Briefly discuss in your groups which of the above questions you will be able to answer. 
+
+Answer: This table only shows the total turnout for each state; we don’t have any details on specific parties or counties so we can’t answer the last two questions. To get those we would need data that shows one record for each candidate or county that includes votes received by those units. 
+
+Now, we need to translate those questions (that we can answer) into language that a computer will understand. All of these questions require math.
+
+Let’s start with “which state had the greatest increase in turnout?” 
+This can be a tricky one. Of course, we can take the 2018 total and subtract the 2014 total to see which  state had the largest increase in raw numbers But is this a fair way to compare states?  Does the change relative to population size matter?
+
+This is a situation where we are trying to compare entities of different sizes and we need to put them on  a level playing field first. Instead of using the raw number change, we can use a percentage change – that will tell us the relative  size of the change in comparison to the others.  We will do this in two ways.  First, we will calculate raw growth rates.  Second, we will calculate turnout as a percentage of the population, and then calculate the percentage change from that.  You will discuss the merits of these two strategies in your group once calculations are complete. 
+
+To do this we’re going to use a formula in R. 
+
+
+```{r}
+
+lab_1_data <- lab_1_data %>% 
+        mutate(turnout_pct_increase = (voted_2018 - voted_2014) / voted_2014 * 100) %>% 
+        arrange(desc(turnout_pct_increase)) 
+
+```
+
+Now create two new columns that present the percentage of the population that voted in each state for each year (Total Voted/Citizen Population).  
+
+```{r}
+lab_1_data <- lab_1_data %>% 
+     mutate(turnout_pct_2014 = voted_2014 / pop_2014 * 100) %>% 
+     mutate(turnout_pct_2018 = voted_2018 / pop_2018 * 100)
+
+```
+
+Now create an additional variable, called “pct pop change” that subtracts the 2014 percentage from the 2018 percentage. Sort this list from largest to smallest. Utah continues to top the list, but the percentage change is much smaller in magnitude.  Discuss in your group the difference between these two percent change calculations.  Which do you think should be reported in newspaper coverage?
+
+```{r}
+lab_1_data <- lab_1_data %>% 
+        mutate(pct_pop_change = turnout_pct_2018 - turnout_pct_2014) %>% 
+        arrange(desc(pct_pop_change)) 
+
+lab_1_data %>% 
+        select(state, pct_pop_change)
+```
+The next question we want to ask is “What is the total turnout in the United States for each year?” To do that we need to add up all the states for each year.  
+
+
+```{r}
+
+lab_1_data <- lab_1_data %>% 
+        mutate(pct_total_2018 = voted_2018 / sum(voted_2018) * 100)
+
+```
+
+```{r}
+
+lab_1_data <- lab_1_data %>% 
+        mutate(pct_dif_us_mean_2018 = sum(voted_2018)/sum(pop_2018)*100 - turnout_pct_2018)
+
+```
+
+```{r}
+lab_1_data %>% summarise(median(voted_2014), median(pop_2014), median(voted_2018), median(pop_2018))
+
+```
+
+```{r}
+lab_1_data %>% summarize((sum(voted_2018) - sum(voted_2014)) / sum(voted_2014)) * 100
+```
+
+```{r}
+
+lab_1_data %>% summarize(sum(voted_2014) / sum(pop_2014) * 100)
+lab_1_data %>% summarize(sum(voted_2018) / sum(pop_2018) * 100)
+
+lab_1_data %>% summarize(sum(voted_2018) / sum(pop_2018) * 100) - lab_1_data %>% summarize(sum(voted_2014) / sum(pop_2014) * 100)
+
+
+```
+
+
+
+```{r eval=FALSE, include=FALSE}
+
+lab_1_data <- lab_1_data %>% 
+        arrange(desc(turnout_increase))
+
+
+```
+
+Now let's make a map of this.
+
+
+```{r eval=FALSE, include=FALSE}
+
+state_codes <- st_codes_f(full_name = lab_1_data$state)
+lab_1_data <- inner_join(lab_1_data, state_codes, by=c("state" = "st_name"))
+us_states <- states(cb = TRUE, resolution = "20m") %>%
+     shift_geometry()
+lab_1_sf <- inner_join(us_states, lab_1_data, by=c("STUSPS" = "stcd"))
+
+lab_1_sf %>% 
+ggplot() +
+     geom_sf(aes(fill = turnout_pct_increase), color = "black", size = 0.1) +
+     scale_fill_viridis_c() +
+     theme_void(base_size = 16) +
+     labs(title = "Percent increase from 2014 to 2018 in Voter Turnout",
+          fill = "Increase %",
+          caption = "Note: Alaska, Hawaii, and Puerto Rico are shifted and not to scale.") +
+     theme(plot.title = element_text(hjust = 0.5))
+
+us_counties <- counties(cb = TRUE, resolution = "20m") %>% 
+        shift_geometry()
+
+ggplot() + geom_sf(data=us_counties) + theme_void()
+```
+
+```{r eval=FALSE, include=FALSE}
+lab_2_data <- read_excel("data/Excel Lab 1.xlsx", sheet = "Campaign Finance") %>% 
+        rename(cost = `Cost of Senate Elections (Winner)`) %>% 
+        arrange(Year)
+
+cpi_2018 <- lab_2_data[lab_2_data$Year == 2018,][["CPI"]]
+
+lab_2_data <- lab_2_data %>% mutate(inflation_rate = (CPI - lag(CPI)) / lag(CPI) * 100) %>% 
+        mutate(real_cost = cpi_2018 / CPI * cost)
+
+
+lab_2_data %>% ggplot(aes(x = Year, y = cost)) + 
+        geom_point() + 
+        stat_smooth(method = loess)
+
+lab_2_data %>% ggplot(aes(x = Year, y = real_cost)) + 
+        geom_point() + 
+        geom_point(aes(x = Year, y = cost)) +
+        stat_smooth(method = lm, fullrange = TRUE) +
+        
+        scale_y_continuous(labels = scales::label_comma())
+
+
+
+
+```
+
+
+
+
+
+

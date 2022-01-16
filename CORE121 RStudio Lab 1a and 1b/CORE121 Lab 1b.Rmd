@@ -1,0 +1,43 @@
+---
+title: "CORE121 Lab 1b"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r echo=TRUE}
+library(readxl)
+library(tigris)
+library(sf)
+library(tidyverse)
+
+
+lab_1b_data <- read_excel("data/Excel Lab 1.xlsx", sheet = "Campaign Finance") %>% 
+  rename(year = Year, cost = "Cost of Senate Elections (Winner)", cpi = CPI)
+
+lab_1b_data %>% 
+  ggplot(aes(x = year, y = cost)) + geom_point(fill = "blue", size = 4, shape = 22) + 
+    scale_y_continuous(labels = scales::comma) + ylab("Cost of Winning Senate Campaigns")
+
+lab_1b_data <- lab_1b_data %>% 
+  mutate(inflation_rate = (lag(cpi) - cpi) / cpi * 100) #notice that the year order is reverse
+
+cpi_2018 <- as.numeric(lab_1b_data %>% filter(year == 2018) %>% select(cpi)) 
+
+lab_1b_data <- lab_1b_data %>% 
+  mutate(real_cost = cost / cpi * cpi_2018)
+
+p <- lab_1b_data %>% 
+  ggplot(aes(x = year, y = real_cost)) + geom_point(fill = "blue", size = 4, shape = 22) + 
+    scale_y_continuous(labels = scales::comma) + ylab("Real Cost of Winning Senate Campaigns") 
+
+plotly::ggplotly(p)
+
+lab_1b_slope <- coef(lm(real_cost ~ year, data = lab_1b_data))[2]
+
+lab_1b_data %>% filter(year == 2018) %>% select(cost) %>% mutate(cost = cost + 6 * lab_1b_slope)
+
+```
+
